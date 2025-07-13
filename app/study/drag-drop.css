@@ -1,0 +1,72 @@
+/* Drag and drop styles */
+.draggable-card {
+    cursor: move;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.draggable-card:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: translateY(-2px);
+}
+
+.draggable-card.dragging {
+    opacity: 0.5;
+    transform: scale(1.02);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.draggable-card.drag-over {
+    border: 2px dashed #3b82f6;
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Custom color badge styles */
+.custom-color-badge {
+    border-width: 1px;
+    border-style: solid;
+    opacity: 0.9;
+    transition: all 0.2s ease;
+}
+
+.custom-color-badge:hover {
+    opacity: 1;
+    transform: scale(1.02);
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+    .drag-handle {
+        display: none;
+    }
+}
+
+/* Subject card header responsive styles */
+@media (min-width: 641px) {
+    .card-header-wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .badge-wrapper {
+        display: flex;
+        justify-content: flex-end;
+    }
+}
+
+/* Custom breakpoints for grid layout */
+@media (min-width: 1000px) and (max-width: 1300px) {
+    .xl-grid-cols-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+/* Fixes for truncated text */
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

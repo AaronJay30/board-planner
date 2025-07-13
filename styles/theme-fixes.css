@@ -1,0 +1,26 @@
+/* Theme fixes for hover states and better contrast */
+
+/* Ensure sidebar menu items have consistent hover states across themes */
+.sidebar-menu-button:hover,
+[data-sidebar="menu-button"]:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+/* Improve hover for cards and interactive elements */
+.card:hover,
+.interactive:hover {
+    box-shadow: 0 0 0 1px hsl(var(--accent));
+}
+
+/* Ensure buttons have proper hover states */
+.btn-hover-fix:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+}
+
+/* Fix for theme transitions */
+.theme-transition [data-sidebar="menu-button"] {
+    transition: background-color 0.3s ease, color 0.3s ease,
+        border-color 0.3s ease;
+}
