@@ -251,34 +251,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    // Function to set background image
+    // Function to set background image (no-op, handled in component)
     const handleSetBackgroundImage = async (imageDataUrl: string) => {
         const userId = localStorage.getItem("userId");
         if (!userId) return;
-
         try {
-            await uploadBackgroundImage(userId, imageDataUrl);
-            setUserPreferences((prev) => ({
-                ...prev,
-                backgroundImage: imageDataUrl,
-            }));
+            localStorage.setItem(
+                `backgroundImage-${userId}`,
+                imageDataUrl || ""
+            );
         } catch (error) {
             console.error("Error setting background image:", error);
             throw error;
         }
     };
 
-    // Function to remove background image
+    // Function to remove background image (no-op, handled in component)
     const handleRemoveBackgroundImage = async () => {
         const userId = localStorage.getItem("userId");
         if (!userId) return;
-
         try {
-            await deleteBackgroundImage(userId);
-            setUserPreferences((prev) => ({
-                ...prev,
-                backgroundImage: undefined,
-            }));
+            localStorage.removeItem(`backgroundImage-${userId}`);
         } catch (error) {
             console.error("Error removing background image:", error);
             throw error;

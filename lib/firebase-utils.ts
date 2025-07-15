@@ -632,7 +632,6 @@ export async function updateVideo(
 }
 
 export interface UserPreferences {
-    backgroundImage?: string;
     theme?: string;
     notifications?: boolean;
     customThemeColors?: {
@@ -673,25 +672,20 @@ export async function uploadBackgroundImage(
     userId: string,
     imageDataUrl: string
 ): Promise<string> {
-    // Store the image data URL in the preferences and set theme to image-theme
-    const preferences = await updateUserPreferences(userId, {
-        backgroundImage: imageDataUrl,
-        theme: "image-theme", // Automatically set the theme to image-theme
-    });
-
-    // Update the local storage theme
+    // Deprecated: No longer used. Only localStorage is used for background images.
     if (typeof window !== "undefined") {
         localStorage.setItem("color-theme", "image-theme");
+        localStorage.setItem(`backgroundImage-${userId}`, imageDataUrl || "");
     }
-
     return imageDataUrl;
 }
 
 // Delete background image
 export async function deleteBackgroundImage(userId: string): Promise<void> {
-    await updateUserPreferences(userId, {
-        backgroundImage: undefined,
-    });
+    // Deprecated: No longer used. Only localStorage is used for background images.
+    if (typeof window !== "undefined") {
+        localStorage.removeItem(`backgroundImage-${userId}`);
+    }
 }
 
 export async function deleteVideo(

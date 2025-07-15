@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Palette, Check, Upload, Image as ImageIcon } from "lucide-react";
 import { useColorTheme } from "./theme-provider";
 import { useAuth } from "@/lib/auth-context";
+import { useBackgroundImage } from "./background-image-context";
 
 type ColorKey =
     | "primary"
@@ -142,16 +143,17 @@ const themes = [
         },
     },
 ];
-
 export function ThemeSelector() {
     const { colorTheme, setColorTheme } = useColorTheme();
     const [currentTheme, setCurrentTheme] = useState(colorTheme || "default");
-    const {
-        userPreferences,
-        setBackgroundImage,
-        removeBackgroundImage,
-        updateUserPreferences,
-    } = useAuth();
+    const { userPreferences, removeBackgroundImage, updateUserPreferences } =
+        useAuth();
+    // Use context for background image
+    const { backgroundImage, setBackgroundImage } = useBackgroundImage();
+    // Local state for preview only (sync with context)
+    const [localBgImage, setLocalBgImage] = useState<string | undefined>(
+        undefined
+    );
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showImageUpload, setShowImageUpload] = useState(false);
     const [customColors, setCustomColors] = useState({
@@ -172,8 +174,6 @@ export function ThemeSelector() {
             // Load custom colors from Firebase if they exist
             if (userPreferences?.customThemeColors) {
                 setCustomColors(userPreferences.customThemeColors);
-
-                // Update the custom theme in themes array
                 const customTheme = themes.find((t) => t.value === "custom");
                 if (customTheme) {
                     customTheme.colors = {
@@ -187,20 +187,19 @@ export function ThemeSelector() {
                 }
             }
 
-            // Check if we should show the image upload section
-            if (savedTheme === "image-theme") {
-                setShowImageUpload(true);
-            }
-
-            // Check if we should show the customization section
+            // Show image upload if theme is image-theme
+            setShowImageUpload(savedTheme === "image-theme");
             setShowCustomization(savedTheme === "custom");
-
-            // Use a short timeout to ensure the DOM is fully ready
             setTimeout(() => {
                 applyTheme(savedTheme);
             }, 50);
         }
     }, [userPreferences]);
+
+    // Sync local preview with context
+    useEffect(() => {
+        setLocalBgImage(backgroundImage || undefined);
+    }, [backgroundImage]);
     const applyTheme = (themeName: string) => {
         const theme = themes.find((t) => t.value === themeName);
         if (!theme) return;
@@ -308,9 +307,8 @@ export function ThemeSelector() {
             void document.body.offsetWidth; // Trigger a reflow
             document.body.classList.add("theme-applied");
         } else if (themeName === "custom") {
-            // Use current customColors from state or userPreferences
-            const colors = userPreferences?.customThemeColors || customColors;
-            applyCustomColors(colors, isDarkMode);
+            // Use current customColors from state
+            applyCustomColors(customColors, isDarkMode);
         } else {
             // Add the theme class with a higher specificity class-based approach
             root.classList.add(`theme-${themeName}`);
@@ -397,25 +395,24 @@ export function ThemeSelector() {
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
-        // Check file size (max 2MB)
-        if (file.size > 10 * 1024 * 1024) {
-            alert("Image size must be less than 10MB");
+        if (file.size > 5 * 1024 * 1024) {
+            alert("Image size must be less than 5MB");
             return;
         }
-
         const reader = new FileReader();
         reader.onload = (e) => {
             const dataUrl = e.target?.result as string;
             if (dataUrl) {
                 setBackgroundImage(dataUrl);
+                setLocalBgImage(dataUrl);
             }
         };
         reader.readAsDataURL(file);
     };
 
     const handleRemoveBackground = () => {
-        removeBackgroundImage();
+        setBackgroundImage(null);
+        setLocalBgImage(undefined);
     };
 
     // Helper function to convert hex to HSL
@@ -621,17 +618,7 @@ export function ThemeSelector() {
             };
         }
 
-        try {
-            // Save to user preferences
-            await updateUserPreferences({
-                ...userPreferences,
-                customThemeColors: newColors,
-                theme: "custom",
-            });
-        } catch (error) {
-            console.error("Failed to save custom colors:", error);
-            // Even if save fails, keep the colors applied locally
-        }
+        // No more saving to user preferences
     };
 
     const selectTheme = (themeName: string) => {
@@ -644,7 +631,7 @@ export function ThemeSelector() {
         setShowCustomization(themeName === "custom");
 
         // If we're switching to image theme, prompt user to upload an image if they don't have one
-        if (themeName === "image-theme" && !userPreferences.backgroundImage) {
+        if (themeName === "image-theme" && !localBgImage) {
             setTimeout(() => {
                 // Prompt user to upload an image
                 if (
@@ -929,12 +916,12 @@ export function ThemeSelector() {
                                     onClick={handleImageUploadClick}
                                 >
                                     <Upload className="h-4 w-4" />
-                                    {userPreferences.backgroundImage
+                                    {localBgImage
                                         ? "Change Image"
                                         : "Upload Image"}
                                 </Button>
 
-                                {userPreferences.backgroundImage && (
+                                {localBgImage && (
                                     <Button
                                         size="sm"
                                         variant="outline"
@@ -954,7 +941,7 @@ export function ThemeSelector() {
                                 />
                             </div>
 
-                            {userPreferences.backgroundImage && (
+                            {localBgImage && (
                                 <div className="mt-2 relative">
                                     <p className="text-xs text-muted-foreground mb-1">
                                         Current Background:
@@ -963,7 +950,7 @@ export function ThemeSelector() {
                                         <div
                                             className="w-full h-full bg-cover bg-center"
                                             style={{
-                                                backgroundImage: `url(${userPreferences.backgroundImage})`,
+                                                backgroundImage: `url(${localBgImage})`,
                                             }}
                                         />
                                     </div>

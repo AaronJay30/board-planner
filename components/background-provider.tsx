@@ -1,7 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
+import React, {
+    createContext,
+    useContext,
+    ReactNode,
+    useEffect,
+    useState,
+} from "react";
+import { useBackgroundImage } from "./background-image-context";
 import { useColorTheme } from "./theme-provider";
 
 interface BackgroundProviderProps {
@@ -9,10 +15,9 @@ interface BackgroundProviderProps {
 }
 
 export function BackgroundProvider({ children }: BackgroundProviderProps) {
-    const { userPreferences } = useAuth();
     const { colorTheme } = useColorTheme();
-    const backgroundImage = userPreferences.backgroundImage;
     const isImageTheme = colorTheme === "image-theme";
+    const { backgroundImage } = useBackgroundImage();
 
     // Apply transparent background for content areas when image theme is active
     useEffect(() => {

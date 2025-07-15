@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { Header } from "@/components/header";
 import { AuthProvider } from "@/lib/auth-context";
 import { BackgroundProvider } from "@/components/background-provider";
+import { BackgroundImageProvider } from "@/components/background-image-context";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,14 +35,16 @@ export default function RootLayout({
                         <SidebarProvider>
                             <AppSidebar />
                             <SidebarInset>
-                                <BackgroundProvider>
-                                    <div className="flex flex-col h-screen">
-                                        <Header />
-                                        <main className="flex-1 overflow-auto p-0">
-                                            {children}
-                                        </main>
-                                    </div>
-                                </BackgroundProvider>
+                                <BackgroundImageProvider>
+                                    <BackgroundProvider>
+                                        <div className="flex flex-col h-screen">
+                                            <Header />
+                                            <main className="flex-1 overflow-auto p-0">
+                                                {children}
+                                            </main>
+                                        </div>
+                                    </BackgroundProvider>
+                                </BackgroundImageProvider>
                             </SidebarInset>
                         </SidebarProvider>
                     </AuthProvider>
