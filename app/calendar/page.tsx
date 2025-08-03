@@ -866,15 +866,22 @@ export default function Calendar() {
                                                 />
                                                 <div className="flex-1 space-y-2">
                                                     <div className="flex items-center justify-between">
-                                                        <h4
-                                                            className={`font-medium ${
+                                                        <button
+                                                            className={`font-medium text-left hover:text-blue-600 transition-colors ${
                                                                 video.completed
                                                                     ? "line-through text-muted-foreground"
                                                                     : ""
                                                             }`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(
+                                                                    video.url,
+                                                                    "_blank"
+                                                                );
+                                                            }}
                                                         >
                                                             {video.title}
-                                                        </h4>
+                                                        </button>
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
@@ -1300,8 +1307,8 @@ export default function Calendar() {
                 <div className="lg:col-span-3 space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-xl flex items-center justify-between">
-                                <span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
                                     <Button
                                         size="sm"
                                         variant="ghost"
@@ -1320,13 +1327,15 @@ export default function Calendar() {
                                     >
                                         &lt;
                                     </Button>
-                                    {new Date(
-                                        selectedYear,
-                                        selectedMonth
-                                    ).toLocaleDateString("en-US", {
-                                        month: "long",
-                                        year: "numeric",
-                                    })}
+                                    <h2 className="text-xl font-semibold">
+                                        {new Date(
+                                            selectedYear,
+                                            selectedMonth
+                                        ).toLocaleDateString("en-US", {
+                                            month: "long",
+                                            year: "numeric",
+                                        })}
+                                    </h2>
                                     <Button
                                         size="sm"
                                         variant="ghost"
@@ -1345,11 +1354,11 @@ export default function Calendar() {
                                     >
                                         &gt;
                                     </Button>
-                                </span>
+                                </div>
                                 <Badge variant="secondary">
                                     Selected: {selectedDate}
                                 </Badge>
-                            </CardTitle>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-7 gap-2 mb-4">
@@ -1512,15 +1521,22 @@ export default function Calendar() {
                                             />
                                             <div className="flex-1 space-y-2">
                                                 <div className="flex items-center justify-between">
-                                                    <h4
-                                                        className={`font-medium ${
+                                                    <button
+                                                        className={`font-medium text-left hover:text-blue-600 transition-colors ${
                                                             video.completed
                                                                 ? "line-through text-muted-foreground"
                                                                 : ""
                                                         }`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(
+                                                                video.url,
+                                                                "_blank"
+                                                            );
+                                                        }}
                                                     >
                                                         {video.title}
-                                                    </h4>
+                                                    </button>
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"

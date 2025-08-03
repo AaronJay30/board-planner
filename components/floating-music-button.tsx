@@ -67,7 +67,7 @@ export function FloatingMusicButton() {
                                         borderRadius: "10px",
                                     }}
                                     sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"
-                                    src="https://embed.music.apple.com/us/playlist/study-music/pl.u-8aAVZANFWqjEy0"
+                                    src="https://embed.music.apple.com/us/playlist/lecture-videos-music/pl.u-8aAVZANFWqjEy0"
                                 />
                             </div>
                         ) : (

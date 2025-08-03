@@ -23,7 +23,10 @@ export function getManilaDateString(date?: Date): string {
 // Returns { study: { seconds }, break: { seconds } } or { seconds } for legacy
 export async function getStudyTime(userId: string, date: string): Promise<any> {
     // date: YYYY-MM-DD
-    const refPath = ref(database, `userData/${userId}/studyTime/${date}`);
+    const refPath = ref(
+        database,
+        `userData/${userId}/lecture-videosTime/${date}`
+    );
     const snapshot = await get(refPath);
     if (!snapshot.exists()) {
         return { study: { seconds: 0 }, break: { seconds: 0 } };
@@ -45,7 +48,10 @@ export async function setStudyTime(
     date: string,
     minutes: number
 ): Promise<void> {
-    const refPath = ref(database, `userData/${userId}/studyTime/${date}`);
+    const refPath = ref(
+        database,
+        `userData/${userId}/lecture-videosTime/${date}`
+    );
     await set(refPath, minutes);
 }
 
@@ -57,7 +63,10 @@ export async function incrementStudyTime(
         | number
         | { study?: { seconds?: number }; break?: { seconds?: number } }
 ): Promise<void> {
-    const refPath = ref(database, `userData/${userId}/studyTime/${date}`);
+    const refPath = ref(
+        database,
+        `userData/${userId}/lecture-videosTime/${date}`
+    );
     const snapshot = await get(refPath);
     let current: any = snapshot.exists() ? snapshot.val() : undefined;
     // If legacy number, convert to object
@@ -290,14 +299,38 @@ export interface Subject {
     updatedAt: string;
 }
 
+export interface Chapter {
+    id: string;
+    subjectId: string;
+    title: string;
+    description?: string;
+    order: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
 export interface Video {
     id: string;
     subjectId: string;
+    chapterId?: string;
     title: string;
     url: string;
     description?: string;
     scheduledDate?: string; // ISO date string
     scheduledTime?: string; // HH:MM format
+    completed: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface Lecture {
+    id: string;
+    subjectId: string;
+    chapterId?: string;
+    title: string;
+    url: string;
+    description?: string;
+    scheduledDate?: string; // ISO date string
     completed: boolean;
     createdAt: string;
     updatedAt: string;
@@ -317,6 +350,8 @@ export interface Task {
 export interface UserStats {
     totalVideos: number;
     watchedVideos: number;
+    totalLectures: number;
+    watchedLectures: number;
     totalSubjects: number;
     studyStreak: number;
     lastStudyDate: string;
@@ -469,6 +504,143 @@ export async function deleteSubject(
     }
 }
 
+// Chapter management functions
+export async function createChapter(
+    userId: string,
+    chapterData: Omit<Chapter, "id" | "createdAt" | "updatedAt">
+): Promise<Chapter> {
+    // Verify subject exists
+    const subjectRef = ref(
+        database,
+        `userData/${userId}/subjects/${chapterData.subjectId}`
+    );
+    const subjectSnapshot = await get(subjectRef);
+
+    if (!subjectSnapshot.exists()) {
+        throw new Error("Subject not found");
+    }
+
+    const timestamp = new Date().toISOString();
+    const chapterRef = push(ref(database, `userData/${userId}/chapters`));
+
+    const newChapter: Chapter = {
+        id: chapterRef.key!,
+        subjectId: chapterData.subjectId,
+        title: chapterData.title,
+        description: chapterData.description || "",
+        order: chapterData.order,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+
+    await set(chapterRef, newChapter);
+    return newChapter;
+}
+
+export async function getChapters(
+    userId: string,
+    subjectId?: string
+): Promise<Chapter[]> {
+    const chaptersRef = ref(database, `userData/${userId}/chapters`);
+    const snapshot = await get(chaptersRef);
+
+    if (!snapshot.exists()) {
+        return [];
+    }
+
+    const chaptersData = snapshot.val();
+    const chapters: Chapter[] = Object.values(chaptersData);
+
+    if (subjectId) {
+        return chapters
+            .filter((chapter) => chapter.subjectId === subjectId)
+            .sort((a, b) => a.order - b.order);
+    }
+
+    return chapters.sort((a, b) => a.order - b.order);
+}
+
+export async function updateChapter(
+    userId: string,
+    chapterId: string,
+    updates: Partial<Omit<Chapter, "id" | "createdAt" | "updatedAt">>
+): Promise<void> {
+    const timestamp = new Date().toISOString();
+    const chapterRef = ref(
+        database,
+        `userData/${userId}/chapters/${chapterId}`
+    );
+
+    await update(chapterRef, {
+        ...updates,
+        updatedAt: timestamp,
+    });
+}
+
+export async function deleteChapter(
+    userId: string,
+    chapterId: string
+): Promise<void> {
+    // Get videos in this chapter first to update stats
+    const videosRef = ref(database, `userData/${userId}/videos`);
+    const videosSnapshot = await get(videosRef);
+
+    let videoCount = 0;
+    let watchedCount = 0;
+
+    if (videosSnapshot.exists()) {
+        const videos = videosSnapshot.val();
+        Object.values(videos).forEach((video: any) => {
+            if (video.chapterId === chapterId) {
+                videoCount++;
+                if (video.completed) {
+                    watchedCount++;
+                }
+            }
+        });
+    }
+
+    // Delete the chapter
+    await remove(ref(database, `userData/${userId}/chapters/${chapterId}`));
+
+    // Update videos to remove chapter reference
+    if (videosSnapshot.exists()) {
+        const videos = videosSnapshot.val();
+        const promises = Object.entries(videos).map(
+            ([videoId, video]: [string, any]) => {
+                if (video.chapterId === chapterId) {
+                    return update(
+                        ref(database, `userData/${userId}/videos/${videoId}`),
+                        { chapterId: null }
+                    );
+                }
+                return Promise.resolve();
+            }
+        );
+
+        await Promise.all(promises);
+    }
+}
+
+export async function subscribeToChapters(
+    userId: string,
+    callback: (chapters: Chapter[]) => void
+): Promise<() => void> {
+    const chaptersRef = ref(database, `userData/${userId}/chapters`);
+
+    const unsubscribe = onValue(chaptersRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const chaptersData = snapshot.val();
+            const chapters: Chapter[] = Object.values(chaptersData);
+            callback(chapters.sort((a, b) => a.order - b.order));
+        } else {
+            callback([]);
+        }
+    });
+
+    return unsubscribe;
+}
+
 // Video management functions
 export async function createVideo(
     userId: string,
@@ -491,6 +663,7 @@ export async function createVideo(
     const newVideo: Video = {
         id: videoRef.key!,
         subjectId: videoData.subjectId,
+        chapterId: videoData.chapterId,
         title: videoData.title,
         url: videoData.url,
         description: videoData.description || "",
@@ -720,6 +893,240 @@ export async function deleteVideo(
     }
 }
 
+// Lecture management functions
+export async function createLecture(
+    userId: string,
+    lectureData: Omit<Lecture, "id" | "completed" | "createdAt" | "updatedAt">
+): Promise<Lecture> {
+    // Verify subject exists
+    const subjectRef = ref(
+        database,
+        `userData/${userId}/subjects/${lectureData.subjectId}`
+    );
+    const subjectSnapshot = await get(subjectRef);
+
+    if (!subjectSnapshot.exists()) {
+        throw new Error("Subject not found");
+    }
+
+    const timestamp = new Date().toISOString();
+    const lectureRef = push(ref(database, `userData/${userId}/lectures`));
+
+    const newLecture: Lecture = {
+        id: lectureRef.key!,
+        subjectId: lectureData.subjectId,
+        chapterId: lectureData.chapterId,
+        title: lectureData.title,
+        url: lectureData.url,
+        description: lectureData.description || "",
+        scheduledDate: lectureData.scheduledDate,
+        completed: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+
+    await set(lectureRef, newLecture);
+
+    // Update user stats
+    const statsRef = ref(database, `userData/${userId}/stats`);
+    const statsSnapshot = await get(statsRef);
+
+    if (statsSnapshot.exists()) {
+        const stats = statsSnapshot.val();
+        await update(statsRef, {
+            totalLectures: (stats.totalLectures || 0) + 1,
+        });
+    }
+
+    return newLecture;
+}
+
+export async function getLectures(
+    userId: string,
+    subjectId?: string
+): Promise<Lecture[]> {
+    const lecturesRef = ref(database, `userData/${userId}/lectures`);
+    const snapshot = await get(lecturesRef);
+
+    if (!snapshot.exists()) {
+        return [];
+    }
+
+    const lecturesData = snapshot.val();
+    const lectures = Object.values(lecturesData) as Lecture[];
+
+    if (subjectId) {
+        return lectures.filter((lecture) => lecture.subjectId === subjectId);
+    }
+
+    return lectures;
+}
+
+export async function getLecture(
+    userId: string,
+    lectureId: string
+): Promise<Lecture | null> {
+    const lectureRef = ref(
+        database,
+        `userData/${userId}/lectures/${lectureId}`
+    );
+    const snapshot = await get(lectureRef);
+
+    if (!snapshot.exists()) {
+        return null;
+    }
+
+    return snapshot.val();
+}
+
+export async function updateLecture(
+    userId: string,
+    lectureId: string,
+    lectureData: Partial<Lecture>
+): Promise<Lecture> {
+    const lectureRef = ref(
+        database,
+        `userData/${userId}/lectures/${lectureId}`
+    );
+    const snapshot = await get(lectureRef);
+
+    if (!snapshot.exists()) {
+        throw new Error("Lecture not found");
+    }
+
+    const currentLecture = snapshot.val();
+    const wasCompleted = currentLecture.completed;
+    const willBeCompleted =
+        lectureData.completed !== undefined
+            ? lectureData.completed
+            : wasCompleted;
+
+    const updatedLecture = {
+        ...currentLecture,
+        ...lectureData,
+        updatedAt: new Date().toISOString(),
+    };
+
+    await update(lectureRef, updatedLecture);
+
+    // Update user stats if completion status changed
+    if (wasCompleted !== willBeCompleted) {
+        const statsRef = ref(database, `userData/${userId}/stats`);
+        const statsSnapshot = await get(statsRef);
+
+        if (statsSnapshot.exists()) {
+            const stats = statsSnapshot.val();
+            const watchedLectures =
+                (stats.watchedLectures || 0) + (willBeCompleted ? 1 : -1);
+
+            const updates: any = {
+                watchedLectures: Math.max(0, watchedLectures),
+            };
+
+            // Update last study date and streak if marking as completed
+            if (willBeCompleted) {
+                const today = new Date().toISOString().split("T")[0];
+                const lastStudyDate = stats.lastStudyDate
+                    ? stats.lastStudyDate.split("T")[0]
+                    : null;
+
+                updates.lastStudyDate = new Date().toISOString();
+
+                // Update streak
+                if (lastStudyDate) {
+                    const lastDate = new Date(lastStudyDate);
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayString = yesterday
+                        .toISOString()
+                        .split("T")[0];
+
+                    if (lastStudyDate === today) {
+                        // Already studied today, no streak update
+                    } else if (lastStudyDate === yesterdayString) {
+                        // Streak continues
+                        updates.studyStreak = (stats.studyStreak || 0) + 1;
+                    } else {
+                        // Streak reset
+                        updates.studyStreak = 1;
+                    }
+                } else {
+                    // First study day
+                    updates.studyStreak = 1;
+                }
+            }
+
+            await update(statsRef, updates);
+        }
+    }
+
+    return updatedLecture;
+}
+
+export async function deleteLecture(
+    userId: string,
+    lectureId: string
+): Promise<void> {
+    const lectureRef = ref(
+        database,
+        `userData/${userId}/lectures/${lectureId}`
+    );
+    const snapshot = await get(lectureRef);
+
+    if (!snapshot.exists()) {
+        throw new Error("Lecture not found");
+    }
+
+    const lecture = snapshot.val();
+    await remove(lectureRef);
+
+    // Update user stats
+    const statsRef = ref(database, `userData/${userId}/stats`);
+    const statsSnapshot = await get(statsRef);
+
+    if (statsSnapshot.exists()) {
+        const stats = statsSnapshot.val();
+        const updates: any = {
+            totalLectures: Math.max(0, (stats.totalLectures || 0) - 1),
+        };
+
+        if (lecture.completed) {
+            updates.watchedLectures = Math.max(
+                0,
+                (stats.watchedLectures || 0) - 1
+            );
+        }
+
+        await update(statsRef, updates);
+    }
+}
+
+export function subscribeToLectures(
+    userId: string,
+    subjectId: string | null,
+    callback: (lectures: Lecture[]) => void
+): () => void {
+    const lecturesRef = ref(database, `userData/${userId}/lectures`);
+
+    onValue(lecturesRef, (snapshot) => {
+        if (snapshot.exists()) {
+            let lectures = Object.values(snapshot.val()) as Lecture[];
+
+            if (subjectId) {
+                lectures = lectures.filter(
+                    (lecture) => lecture.subjectId === subjectId
+                );
+            }
+
+            callback(lectures);
+        } else {
+            callback([]);
+        }
+    });
+
+    return () => off(lecturesRef);
+}
+
 // Task management functions
 export async function createTask(
     userId: string,
@@ -822,6 +1229,8 @@ export async function getUserStats(userId: string): Promise<UserStats> {
         const defaultStats: UserStats = {
             totalVideos: 0,
             watchedVideos: 0,
+            totalLectures: 0,
+            watchedLectures: 0,
             totalSubjects: 0,
             studyStreak: 0,
             lastStudyDate: new Date().toISOString(),

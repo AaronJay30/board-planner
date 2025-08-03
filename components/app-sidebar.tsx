@@ -8,6 +8,7 @@ import {
     BookOpenCheck,
     User,
     LogOut,
+    FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,9 +42,14 @@ const navigation = [
         icon: BarChart3,
     },
     {
-        name: "Study",
-        href: "/study",
+        name: "Lecture Videos",
+        href: "/lecture-videos",
         icon: BookOpen,
+    },
+    {
+        name: "Lecture Notes",
+        href: "/lecture-notes",
+        icon: FileText,
     },
     {
         name: "Calendar",

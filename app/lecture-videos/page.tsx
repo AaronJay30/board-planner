@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import "./drag-drop.css";
 import {
     Collapsible,
@@ -27,6 +28,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+
 import { Label } from "@/components/ui/label";
 import {
     Folder,
@@ -98,6 +100,7 @@ export default function Study() {
     const [editVideoUrl, setEditVideoUrl] = useState("");
     const [editVideoDate, setEditVideoDate] = useState("");
     const [editVideoTime, setEditVideoTime] = useState("");
+
     const [selectedColor, setSelectedColor] = useState("");
     const [customColor, setCustomColor] = useState("");
     const { toast } = useToast();
@@ -191,7 +194,7 @@ export default function Study() {
         if (!userId) {
             toast({
                 title: "Not logged in",
-                description: "Please log in to view your lecture videos",
+                description: "Please log in to view your videos",
                 variant: "destructive",
             });
             setLoading(false);
@@ -210,8 +213,7 @@ export default function Study() {
                 console.error("Error loading data:", error);
                 toast({
                     title: "Error loading data",
-                    description:
-                        "There was a problem loading your lecture videos",
+                    description: "There was a problem loading your videos",
                     variant: "destructive",
                 });
             } finally {
@@ -718,10 +720,10 @@ export default function Study() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                 <div>
                     <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-                        Lecture Videos 📺
+                        Study Videos 📹
                     </h1>
                     <p className="text-muted-foreground">
-                        Organize your lectures and track your progress
+                        Organize your study videos by subject
                     </p>
                 </div>
 
@@ -1024,21 +1026,30 @@ export default function Study() {
                                                                                 }
                                                                                 className="mt-1 flex-shrink-0"
                                                                             />
-                                                                            <div className="flex-1 space-y-1">
-                                                                                {" "}
+                                                                            <div className="flex-1 space-y-1 min-w-0">
                                                                                 <div className="flex items-center justify-between">
-                                                                                    <label
-                                                                                        htmlFor={`video-${video.id}`}
-                                                                                        className={`font-medium text-sm truncate max-w-[120px] sm:max-w-[180px] md:max-w-[150px] lg:max-w-[200px] ${
-                                                                                            video.completed
-                                                                                                ? "line-through text-muted-foreground"
-                                                                                                : ""
-                                                                                        }`}
-                                                                                    >
-                                                                                        {
-                                                                                            video.title
-                                                                                        }
-                                                                                    </label>
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <button
+                                                                                            className={`font-medium text-sm truncate max-w-full text-left hover:text-blue-600 transition-colors block ${
+                                                                                                video.completed
+                                                                                                    ? "line-through text-muted-foreground"
+                                                                                                    : ""
+                                                                                            }`}
+                                                                                            onClick={(
+                                                                                                e
+                                                                                            ) => {
+                                                                                                e.stopPropagation();
+                                                                                                window.open(
+                                                                                                    video.url,
+                                                                                                    "_blank"
+                                                                                                );
+                                                                                            }}
+                                                                                        >
+                                                                                            {
+                                                                                                video.title
+                                                                                            }
+                                                                                        </button>
+                                                                                    </div>
                                                                                     <div className="flex flex-wrap items-center gap-1">
                                                                                         <Button
                                                                                             variant="ghost"
@@ -1187,7 +1198,6 @@ export default function Study() {
                                                 <div>
                                                     <Label htmlFor="video-date">
                                                         Scheduled Date
-                                                        (Optional)
                                                     </Label>
                                                     <Input
                                                         id="video-date"
@@ -1203,7 +1213,6 @@ export default function Study() {
                                                 <div>
                                                     <Label htmlFor="video-time">
                                                         Scheduled Time
-                                                        (Optional)
                                                     </Label>
                                                     <Input
                                                         id="video-time"
@@ -1291,7 +1300,7 @@ export default function Study() {
                         </div>
                         <div>
                             <Label htmlFor="edit-video-date">
-                                Scheduled Date (Optional)
+                                Scheduled Date
                             </Label>
                             <Input
                                 id="edit-video-date"
@@ -1304,7 +1313,7 @@ export default function Study() {
                         </div>
                         <div>
                             <Label htmlFor="edit-video-time">
-                                Scheduled Time (Optional)
+                                Scheduled Time
                             </Label>
                             <Input
                                 id="edit-video-time"
