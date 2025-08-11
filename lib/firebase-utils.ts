@@ -314,7 +314,7 @@ export interface Video {
     subjectId: string;
     chapterId?: string;
     title: string;
-    url: string;
+    url?: string;
     description?: string;
     scheduledDate?: string; // ISO date string
     scheduledTime?: string; // HH:MM format
@@ -660,19 +660,29 @@ export async function createVideo(
     const timestamp = new Date().toISOString();
     const videoRef = push(ref(database, `userData/${userId}/videos`));
 
-    const newVideo: Video = {
+    const newVideo: any = {
         id: videoRef.key!,
         subjectId: videoData.subjectId,
-        chapterId: videoData.chapterId,
         title: videoData.title,
-        url: videoData.url,
         description: videoData.description || "",
-        scheduledDate: videoData.scheduledDate,
-        scheduledTime: videoData.scheduledTime,
         completed: false,
         createdAt: timestamp,
         updatedAt: timestamp,
     };
+
+    // Only add optional fields if they have values
+    if (videoData.chapterId) {
+        newVideo.chapterId = videoData.chapterId;
+    }
+    if (videoData.url) {
+        newVideo.url = videoData.url;
+    }
+    if (videoData.scheduledDate) {
+        newVideo.scheduledDate = videoData.scheduledDate;
+    }
+    if (videoData.scheduledTime) {
+        newVideo.scheduledTime = videoData.scheduledTime;
+    }
 
     await set(videoRef, newVideo);
 
@@ -742,13 +752,20 @@ export async function updateVideo(
     const willBeCompleted =
         videoData.completed !== undefined ? videoData.completed : wasCompleted;
 
-    const updatedVideo = {
-        ...currentVideo,
-        ...videoData,
+    // Create update object without undefined values
+    const updateData: any = {
         updatedAt: new Date().toISOString(),
     };
 
-    await update(videoRef, updatedVideo);
+    // Only include fields that are defined
+    Object.keys(videoData).forEach((key) => {
+        const value = (videoData as any)[key];
+        if (value !== undefined) {
+            updateData[key] = value;
+        }
+    });
+
+    await update(videoRef, updateData);
 
     // Update user stats if completion status changed
     if (wasCompleted !== willBeCompleted) {
@@ -801,7 +818,9 @@ export async function updateVideo(
         }
     }
 
-    return updatedVideo;
+    // Return the updated video by getting it from the database
+    const updatedSnapshot = await get(videoRef);
+    return updatedSnapshot.val();
 }
 
 export interface UserPreferences {

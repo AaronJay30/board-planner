@@ -61,7 +61,7 @@ import {
 interface Video {
     id: string;
     title: string;
-    url: string;
+    url?: string;
     completed: boolean;
     scheduledDate?: string;
     scheduledTime?: string;
@@ -369,7 +369,7 @@ export default function Study() {
     };
 
     const addVideo = async () => {
-        if (newVideoTitle.trim() && newVideoUrl.trim() && selectedSubjectId) {
+        if (newVideoTitle.trim() && selectedSubjectId) {
             const userId = getUserId();
             if (!userId) return;
 
@@ -379,7 +379,7 @@ export default function Study() {
                 // Create video in Firebase
                 await createVideo(userId, {
                     title: newVideoTitle,
-                    url: newVideoUrl,
+                    url: newVideoUrl.trim() || undefined,
                     subjectId: selectedSubjectId,
                     scheduledDate: newVideoDate || undefined,
                     scheduledTime: newVideoTime || undefined,
@@ -483,7 +483,7 @@ export default function Study() {
     };
 
     const updateExistingVideo = async () => {
-        if (!editingVideo || !editVideoTitle.trim() || !editVideoUrl.trim()) {
+        if (!editingVideo || !editVideoTitle.trim()) {
             return;
         }
 
@@ -496,7 +496,7 @@ export default function Study() {
             // Update video in Firebase
             await updateVideo(userId, editingVideo.id, {
                 title: editVideoTitle,
-                url: editVideoUrl,
+                url: editVideoUrl.trim() || undefined,
                 scheduledDate: editVideoDate || undefined,
                 scheduledTime: editVideoTime || undefined,
             });
@@ -1030,19 +1030,27 @@ export default function Study() {
                                                                                 <div className="flex items-center justify-between">
                                                                                     <div className="flex-1 min-w-0">
                                                                                         <button
-                                                                                            className={`font-medium text-sm truncate max-w-full text-left hover:text-blue-600 transition-colors block ${
+                                                                                            className={`font-medium text-sm truncate max-w-full text-left transition-colors block ${
                                                                                                 video.completed
                                                                                                     ? "line-through text-muted-foreground"
                                                                                                     : ""
+                                                                                            } ${
+                                                                                                video.url
+                                                                                                    ? "hover:text-blue-600 cursor-pointer"
+                                                                                                    : "cursor-default"
                                                                                             }`}
                                                                                             onClick={(
                                                                                                 e
                                                                                             ) => {
                                                                                                 e.stopPropagation();
-                                                                                                window.open(
-                                                                                                    video.url,
-                                                                                                    "_blank"
-                                                                                                );
+                                                                                                if (
+                                                                                                    video.url
+                                                                                                ) {
+                                                                                                    window.open(
+                                                                                                        video.url,
+                                                                                                        "_blank"
+                                                                                                    );
+                                                                                                }
                                                                                             }}
                                                                                         >
                                                                                             {
@@ -1063,7 +1071,8 @@ export default function Study() {
                                                                                                     video.title
                                                                                                 );
                                                                                                 setEditVideoUrl(
-                                                                                                    video.url
+                                                                                                    video.url ||
+                                                                                                        ""
                                                                                                 );
                                                                                                 setEditVideoDate(
                                                                                                     video.scheduledDate ||
@@ -1089,22 +1098,24 @@ export default function Study() {
                                                                                         >
                                                                                             <Trash2 className="h-3 w-3" />
                                                                                         </Button>
-                                                                                        <Button
-                                                                                            variant="ghost"
-                                                                                            size="sm"
-                                                                                            className="h-6 w-6 p-0"
-                                                                                            asChild
-                                                                                        >
-                                                                                            <a
-                                                                                                href={
-                                                                                                    video.url
-                                                                                                }
-                                                                                                target="_blank"
-                                                                                                rel="noopener noreferrer"
+                                                                                        {video.url && (
+                                                                                            <Button
+                                                                                                variant="ghost"
+                                                                                                size="sm"
+                                                                                                className="h-6 w-6 p-0"
+                                                                                                asChild
                                                                                             >
-                                                                                                <ExternalLink className="h-3 w-3" />
-                                                                                            </a>
-                                                                                        </Button>
+                                                                                                <a
+                                                                                                    href={
+                                                                                                        video.url
+                                                                                                    }
+                                                                                                    target="_blank"
+                                                                                                    rel="noopener noreferrer"
+                                                                                                >
+                                                                                                    <ExternalLink className="h-3 w-3" />
+                                                                                                </a>
+                                                                                            </Button>
+                                                                                        )}
                                                                                     </div>
                                                                                 </div>
                                                                                 {(video.scheduledDate ||
@@ -1182,7 +1193,7 @@ export default function Study() {
                                                 </div>
                                                 <div>
                                                     <Label htmlFor="video-url">
-                                                        Video URL
+                                                        Video URL (Optional)
                                                     </Label>
                                                     <Input
                                                         id="video-url"
@@ -1192,7 +1203,7 @@ export default function Study() {
                                                                 e.target.value
                                                             )
                                                         }
-                                                        placeholder="https://..."
+                                                        placeholder="https://... (optional)"
                                                     />
                                                 </div>
                                                 <div>
@@ -1288,14 +1299,16 @@ export default function Study() {
                             />
                         </div>
                         <div>
-                            <Label htmlFor="edit-video-url">Video URL</Label>
+                            <Label htmlFor="edit-video-url">
+                                Video URL (Optional)
+                            </Label>
                             <Input
                                 id="edit-video-url"
                                 value={editVideoUrl}
                                 onChange={(e) =>
                                     setEditVideoUrl(e.target.value)
                                 }
-                                placeholder="https://..."
+                                placeholder="https://... (optional)"
                             />
                         </div>
                         <div>
