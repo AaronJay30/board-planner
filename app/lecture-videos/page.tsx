@@ -127,6 +127,10 @@ export default function Study() {
         }>;
     }>({ subjects: [] });
     const [csvLoading, setCsvLoading] = useState(false);
+    const [csvProgress, setCsvProgress] = useState(0);
+    const [csvProgressText, setCsvProgressText] = useState("");
+    const [csvTotalItems, setCsvTotalItems] = useState(0);
+    const [csvProcessedItems, setCsvProcessedItems] = useState(0);
 
     // For tracking subject order
     const [subjectOrder, setSubjectOrder] = useState<string[]>([]);
@@ -537,9 +541,21 @@ export default function Study() {
         }
 
         setCsvLoading(true);
+        setCsvProgress(0);
+        setCsvProcessedItems(0);
 
         try {
+            // Calculate total items to process
+            const totalVideos = csvPreview.subjects.reduce(
+                (total, subject) => total + subject.videos.length,
+                0
+            );
+            const totalItems = csvPreview.subjects.length + totalVideos;
+            setCsvTotalItems(totalItems);
+            setCsvProgressText("Initializing...");
+
             // Get existing subjects and videos first
+            setCsvProgressText("Loading existing data...");
             const existingSubjects = await getSubjects(userId);
             const existingVideos = await getVideos(userId);
 
@@ -558,8 +574,11 @@ export default function Study() {
             let newSubjectsCount = 0;
             let updatedVideosCount = 0;
             let newVideosCount = 0;
+            let processedItems = 0;
 
             for (const subjectData of csvPreview.subjects) {
+                setCsvProgressText(`Processing subject: ${subjectData.name}`);
+
                 let currentSubject;
                 const subjectNameLower = subjectData.name.toLowerCase();
 
@@ -580,8 +599,20 @@ export default function Study() {
                     console.log(`Created new subject: "${subjectData.name}"`);
                 }
 
+                // Update progress after processing subject
+                processedItems++;
+                setCsvProcessedItems(processedItems);
+                setCsvProgress((processedItems / totalItems) * 100);
+
                 // Process videos for this subject
-                for (const videoData of subjectData.videos) {
+                for (let i = 0; i < subjectData.videos.length; i++) {
+                    const videoData = subjectData.videos[i];
+                    setCsvProgressText(
+                        `Processing video ${i + 1}/${
+                            subjectData.videos.length
+                        } in ${subjectData.name}: ${videoData.title}`
+                    );
+
                     const videoKey = `${
                         currentSubject.id
                     }_${videoData.title.toLowerCase()}`;
@@ -619,8 +650,15 @@ export default function Study() {
                             `Created new video: "${videoData.title}" in subject "${subjectData.name}"`
                         );
                     }
+
+                    // Update progress after processing each video
+                    processedItems++;
+                    setCsvProcessedItems(processedItems);
+                    setCsvProgress((processedItems / totalItems) * 100);
                 }
             }
+
+            setCsvProgressText("Completing import...");
 
             // Show detailed success message
             const messages = [];
@@ -645,6 +683,10 @@ export default function Study() {
             setCsvFile(null);
             setCsvData([]);
             setCsvPreview({ subjects: [] });
+            setCsvProgress(0);
+            setCsvProgressText("");
+            setCsvTotalItems(0);
+            setCsvProcessedItems(0);
 
             // Refresh data
             setTimeout(() => {
@@ -660,6 +702,11 @@ export default function Study() {
             });
         } finally {
             setCsvLoading(false);
+            // Reset progress states in case of error
+            setCsvProgress(0);
+            setCsvProgressText("");
+            setCsvTotalItems(0);
+            setCsvProcessedItems(0);
         }
     };
 
@@ -1508,6 +1555,33 @@ export default function Study() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Progress Bar Section */}
+                            {csvLoading && (
+                                <div className="space-y-4 border-t pt-4">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="font-medium">
+                                                Upload Progress
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {csvProcessedItems} /{" "}
+                                                {csvTotalItems} items (
+                                                {Math.round(csvProgress)}%)
+                                            </span>
+                                        </div>
+                                        <Progress
+                                            value={csvProgress}
+                                            className="h-2"
+                                        />
+                                        {csvProgressText && (
+                                            <div className="text-sm text-muted-foreground truncate">
+                                                {csvProgressText}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             <DialogFooter>
                                 <Button

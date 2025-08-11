@@ -146,8 +146,12 @@ const themes = [
 export function ThemeSelector() {
     const { colorTheme, setColorTheme } = useColorTheme();
     const [currentTheme, setCurrentTheme] = useState(colorTheme || "default");
-    const { userPreferences, removeBackgroundImage, updateUserPreferences } =
-        useAuth();
+    const {
+        userPreferences,
+        removeBackgroundImage,
+        updateUserPreferences,
+        setBackgroundImage: authSetBgImage,
+    } = useAuth();
     // Use context for background image
     const { backgroundImage, setBackgroundImage } = useBackgroundImage();
     // Local state for preview only (sync with context)
@@ -187,6 +191,18 @@ export function ThemeSelector() {
                 }
             }
 
+            // Load background image from localStorage for the specific user
+            const userId = localStorage.getItem("userId");
+            if (userId) {
+                const savedBgImage = localStorage.getItem(
+                    `backgroundImage-${userId}`
+                );
+                if (savedBgImage && !backgroundImage) {
+                    setBackgroundImage(savedBgImage);
+                    setLocalBgImage(savedBgImage);
+                }
+            }
+
             // Show image upload if theme is image-theme
             setShowImageUpload(savedTheme === "image-theme");
             setShowCustomization(savedTheme === "custom");
@@ -194,7 +210,7 @@ export function ThemeSelector() {
                 applyTheme(savedTheme);
             }, 50);
         }
-    }, [userPreferences]);
+    }, [userPreferences, backgroundImage, setBackgroundImage]);
 
     // Sync local preview with context
     useEffect(() => {
@@ -400,19 +416,40 @@ export function ThemeSelector() {
             return;
         }
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             const dataUrl = e.target?.result as string;
             if (dataUrl) {
+                // Update both context and auth persistence
                 setBackgroundImage(dataUrl);
                 setLocalBgImage(dataUrl);
+
+                // Also save to user preferences through auth context
+                try {
+                    await authSetBgImage(dataUrl);
+                } catch (error) {
+                    console.error(
+                        "Error saving background image to user preferences:",
+                        error
+                    );
+                }
             }
         };
         reader.readAsDataURL(file);
     };
 
-    const handleRemoveBackground = () => {
+    const handleRemoveBackground = async () => {
         setBackgroundImage(null);
         setLocalBgImage(undefined);
+
+        // Also remove from user preferences
+        try {
+            await removeBackgroundImage();
+        } catch (error) {
+            console.error(
+                "Error removing background image from user preferences:",
+                error
+            );
+        }
     };
 
     // Helper function to convert hex to HSL

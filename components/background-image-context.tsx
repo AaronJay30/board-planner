@@ -1,5 +1,11 @@
 "use client";
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    ReactNode,
+} from "react";
 
 interface BackgroundImageContextType {
     backgroundImage: string | null;
@@ -11,7 +17,41 @@ const BackgroundImageContext = createContext<
 >(undefined);
 
 export function BackgroundImageProvider({ children }: { children: ReactNode }) {
-    const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+    const [backgroundImage, setBackgroundImageState] = useState<string | null>(
+        null
+    );
+
+    // Load from localStorage on mount
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const userId = localStorage.getItem("userId");
+            if (userId) {
+                const savedImage = localStorage.getItem(
+                    `backgroundImage-${userId}`
+                );
+                if (savedImage) {
+                    setBackgroundImageState(savedImage);
+                }
+            }
+        }
+    }, []);
+
+    const setBackgroundImage = (img: string | null) => {
+        setBackgroundImageState(img);
+
+        // Persist to localStorage with userId-specific key
+        if (typeof window !== "undefined") {
+            const userId = localStorage.getItem("userId");
+            if (userId) {
+                if (img) {
+                    localStorage.setItem(`backgroundImage-${userId}`, img);
+                } else {
+                    localStorage.removeItem(`backgroundImage-${userId}`);
+                }
+            }
+        }
+    };
+
     return (
         <BackgroundImageContext.Provider
             value={{ backgroundImage, setBackgroundImage }}
