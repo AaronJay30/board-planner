@@ -42,6 +42,9 @@ import {
     Pencil,
     Trash2,
     GripVertical,
+    Upload,
+    Download,
+    FileText,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -105,6 +108,24 @@ export default function Study() {
     const [customColor, setCustomColor] = useState("");
     const { toast } = useToast();
 
+    // CSV Upload state
+    const [csvUploadOpen, setCsvUploadOpen] = useState(false);
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [csvData, setCsvData] = useState<any[]>([]);
+    const [csvPreview, setCsvPreview] = useState<{
+        subjects: Array<{
+            name: string;
+            color: string;
+            videos: Array<{
+                title: string;
+                url?: string;
+                scheduledDate?: string;
+                scheduledTime?: string;
+            }>;
+        }>;
+    }>({ subjects: [] });
+    const [csvLoading, setCsvLoading] = useState(false);
+
     // For tracking subject order
     const [subjectOrder, setSubjectOrder] = useState<string[]>([]);
 
@@ -162,6 +183,235 @@ export default function Study() {
             return localStorage.getItem("userId");
         }
         return null;
+    };
+
+    // CSV Upload Functions
+    const downloadCsvTemplate = () => {
+        const headers = [
+            "Subject Name",
+            "Subject Color",
+            "Video Title",
+            "Video URL",
+            "Scheduled Date",
+            "Scheduled Time",
+        ];
+        const sampleData = [
+            [
+                "Biology",
+                "#dcfce7",
+                "Cell Structure and Function",
+                "https://youtube.com/watch?v=example1",
+                "2024-01-15",
+                "10:00",
+            ],
+            [
+                "Biology",
+                "#dcfce7",
+                "Photosynthesis Process",
+                "https://youtube.com/watch?v=example2",
+                "2024-01-16",
+                "14:30",
+            ],
+            [
+                "Chemistry",
+                "#dbeafe",
+                "Atomic Structure",
+                "https://youtube.com/watch?v=example3",
+                "2024-01-17",
+                "09:00",
+            ],
+            ["Chemistry", "#dbeafe", "Chemical Bonding", "", "2024-01-18", ""],
+        ];
+
+        const csvContent = [headers, ...sampleData]
+            .map((row) => row.map((field) => `"${field}"`).join(","))
+            .join("\n");
+
+        const blob = new Blob([csvContent], {
+            type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "subjects_videos_template.csv";
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        toast({
+            title: "Template downloaded",
+            description: "CSV template has been downloaded successfully",
+        });
+    };
+
+    const handleCsvFileChange = (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = event.target.files?.[0];
+        if (file && file.type === "text/csv") {
+            setCsvFile(file);
+            parseCsvFile(file);
+        } else {
+            toast({
+                title: "Invalid file type",
+                description: "Please select a CSV file",
+                variant: "destructive",
+            });
+        }
+    };
+
+    const parseCsvFile = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            const lines = text.split("\n").filter((line) => line.trim());
+
+            if (lines.length < 2) {
+                toast({
+                    title: "Invalid CSV",
+                    description:
+                        "CSV file must have at least a header and one data row",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            // Parse CSV (simple parsing - assumes no commas in quoted fields)
+            const data = lines
+                .slice(1)
+                .map((line) => {
+                    const values = line
+                        .split(",")
+                        .map((val) => val.replace(/^"|"$/g, "").trim());
+                    return {
+                        subjectName: values[0] || "",
+                        subjectColor: values[1] || "",
+                        videoTitle: values[2] || "",
+                        videoUrl: values[3] || "",
+                        scheduledDate: values[4] || "",
+                        scheduledTime: values[5] || "",
+                    };
+                })
+                .filter((row) => row.subjectName && row.videoTitle);
+
+            setCsvData(data);
+            generatePreview(data);
+        };
+
+        reader.onerror = () => {
+            toast({
+                title: "Error reading file",
+                description: "There was an error reading the CSV file",
+                variant: "destructive",
+            });
+        };
+
+        reader.readAsText(file);
+    };
+
+    const generatePreview = (data: any[]) => {
+        const subjectsMap = new Map();
+
+        data.forEach((row) => {
+            if (!subjectsMap.has(row.subjectName)) {
+                subjectsMap.set(row.subjectName, {
+                    name: row.subjectName,
+                    color:
+                        row.subjectColor ||
+                        pastelColors[subjectsMap.size % pastelColors.length]
+                            .class,
+                    videos: [],
+                });
+            }
+
+            const subject = subjectsMap.get(row.subjectName);
+            subject.videos.push({
+                title: row.videoTitle,
+                url: row.videoUrl || undefined,
+                scheduledDate: row.scheduledDate || undefined,
+                scheduledTime: row.scheduledTime || undefined,
+            });
+        });
+
+        setCsvPreview({
+            subjects: Array.from(subjectsMap.values()),
+        });
+    };
+
+    const saveCsvData = async () => {
+        if (csvPreview.subjects.length === 0) {
+            toast({
+                title: "No data to save",
+                description: "Please upload a valid CSV file first",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const userId = getUserId();
+        if (!userId) {
+            toast({
+                title: "Not logged in",
+                description: "Please log in to save subjects and videos",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setCsvLoading(true);
+
+        try {
+            for (const subjectData of csvPreview.subjects) {
+                // Create subject
+                const subject = await createSubject(userId, {
+                    name: subjectData.name,
+                    color: subjectData.color,
+                });
+
+                // Create videos for this subject
+                for (const videoData of subjectData.videos) {
+                    await createVideo(userId, {
+                        title: videoData.title,
+                        url: videoData.url,
+                        subjectId: subject.id,
+                        scheduledDate: videoData.scheduledDate,
+                        scheduledTime: videoData.scheduledTime,
+                    });
+                }
+            }
+
+            toast({
+                title: "Import successful",
+                description: `Successfully imported ${
+                    csvPreview.subjects.length
+                } subjects with ${csvPreview.subjects.reduce(
+                    (total, subject) => total + subject.videos.length,
+                    0
+                )} videos`,
+            });
+
+            // Reset CSV modal state
+            setCsvUploadOpen(false);
+            setCsvFile(null);
+            setCsvData([]);
+            setCsvPreview({ subjects: [] });
+
+            // Refresh data
+            setTimeout(() => {
+                refreshData();
+            }, 1000);
+        } catch (error) {
+            console.error("Error importing CSV data:", error);
+            toast({
+                title: "Import failed",
+                description:
+                    "There was an error importing your data. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setCsvLoading(false);
+        }
     };
 
     // Update subject order when subjects change
@@ -826,6 +1076,175 @@ export default function Study() {
                                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                     )}
                                     Add Subject
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog
+                        open={csvUploadOpen}
+                        onOpenChange={setCsvUploadOpen}
+                    >
+                        <DialogTrigger asChild>
+                            <Button
+                                variant="outline"
+                                className="hover:bg-accent hover:text-accent-foreground"
+                            >
+                                <Upload className="w-4 h-4 mr-2" />
+                                <span>Bulk Upload</span>
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>
+                                    Bulk Upload Subjects & Videos
+                                </DialogTitle>
+                                <DialogDescription>
+                                    Upload a CSV file to create multiple
+                                    subjects and videos at once.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-6">
+                                {/* Download Template Section */}
+                                <div className="border rounded-lg p-4 bg-muted/50">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="font-medium flex items-center">
+                                                <FileText className="w-4 h-4 mr-2" />
+                                                Download Template
+                                            </h3>
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                Get the CSV template with the
+                                                correct format
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            onClick={downloadCsvTemplate}
+                                            className="shrink-0"
+                                        >
+                                            <Download className="w-4 h-4 mr-2" />
+                                            Download Template
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Upload Section */}
+                                <div className="border rounded-lg p-4">
+                                    <h3 className="font-medium mb-2">
+                                        Upload CSV File
+                                    </h3>
+                                    <div className="space-y-2">
+                                        <Input
+                                            type="file"
+                                            accept=".csv"
+                                            onChange={handleCsvFileChange}
+                                            className="cursor-pointer"
+                                        />
+                                        {csvFile && (
+                                            <p className="text-sm text-muted-foreground">
+                                                Selected file: {csvFile.name}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Preview Section */}
+                                {csvPreview.subjects.length > 0 && (
+                                    <div className="border rounded-lg p-4">
+                                        <h3 className="font-medium mb-4">
+                                            Preview
+                                        </h3>
+                                        <div className="space-y-4 max-h-64 overflow-y-auto">
+                                            {csvPreview.subjects.map(
+                                                (subject, index) => (
+                                                    <div
+                                                        key={index}
+                                                        className="border rounded p-3 bg-muted/30"
+                                                    >
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <div
+                                                                className="w-4 h-4 rounded"
+                                                                style={{
+                                                                    backgroundColor:
+                                                                        subject.color.startsWith(
+                                                                            "#"
+                                                                        )
+                                                                            ? subject.color
+                                                                            : undefined,
+                                                                }}
+                                                            />
+                                                            <span className="font-medium">
+                                                                {subject.name}
+                                                            </span>
+                                                            <Badge variant="secondary">
+                                                                {
+                                                                    subject
+                                                                        .videos
+                                                                        .length
+                                                                }{" "}
+                                                                videos
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="ml-6 space-y-1">
+                                                            {subject.videos.map(
+                                                                (
+                                                                    video,
+                                                                    videoIndex
+                                                                ) => (
+                                                                    <div
+                                                                        key={
+                                                                            videoIndex
+                                                                        }
+                                                                        className="text-sm text-muted-foreground"
+                                                                    >
+                                                                        •{" "}
+                                                                        {
+                                                                            video.title
+                                                                        }
+                                                                        {video.scheduledDate && (
+                                                                            <span className="ml-2 text-xs">
+                                                                                (
+                                                                                {
+                                                                                    video.scheduledDate
+                                                                                }{" "}
+                                                                                {
+                                                                                    video.scheduledTime
+                                                                                }
+                                                                                )
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setCsvUploadOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={saveCsvData}
+                                    disabled={
+                                        csvPreview.subjects.length === 0 ||
+                                        csvLoading
+                                    }
+                                >
+                                    {csvLoading && (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    )}
+                                    Save {csvPreview.subjects.length} Subjects
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
