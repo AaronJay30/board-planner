@@ -752,16 +752,35 @@ export async function updateVideo(
     const willBeCompleted =
         videoData.completed !== undefined ? videoData.completed : wasCompleted;
 
-    // Create update object without undefined values
+    // Create update object
     const updateData: any = {
         updatedAt: new Date().toISOString(),
     };
 
-    // Only include fields that are defined
+    // Handle defined values (including null for clearing fields)
     Object.keys(videoData).forEach((key) => {
         const value = (videoData as any)[key];
         if (value !== undefined) {
+            // If value is explicitly undefined, we want to remove the field
             updateData[key] = value;
+        }
+    });
+
+    // For fields that are undefined, we need to explicitly remove them
+    // This handles the case where scheduledDate or scheduledTime should be cleared
+    const fieldsToCheck = [
+        "scheduledDate",
+        "scheduledTime",
+        "url",
+        "description",
+    ];
+    fieldsToCheck.forEach((field) => {
+        if (
+            videoData.hasOwnProperty(field) &&
+            (videoData as any)[field] === undefined
+        ) {
+            // Set to null to remove the field in Firebase
+            updateData[field] = null;
         }
     });
 

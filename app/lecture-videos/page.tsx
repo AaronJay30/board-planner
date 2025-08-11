@@ -116,11 +116,13 @@ export default function Study() {
         subjects: Array<{
             name: string;
             color: string;
+            isNew?: boolean;
             videos: Array<{
                 title: string;
                 url?: string;
                 scheduledDate?: string;
                 scheduledTime?: string;
+                isNew?: boolean;
             }>;
         }>;
     }>({ subjects: [] });
@@ -186,6 +188,65 @@ export default function Study() {
     };
 
     // CSV Upload Functions
+    const convertDateFormat = (dateStr: string): string => {
+        if (!dateStr || dateStr.trim() === "") return "";
+
+        const trimmed = dateStr.trim();
+
+        // Check if already in YYYY-MM-DD format
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return trimmed;
+        }
+
+        // Check for MM/DD/YYYY format
+        const mmddyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (mmddyyyyMatch) {
+            const [, month, day, year] = mmddyyyyMatch;
+            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        }
+
+        // Check for MM-DD-YYYY format
+        const mmddyyyyDashMatch = trimmed.match(
+            /^(\d{1,2})-(\d{1,2})-(\d{4})$/
+        );
+        if (mmddyyyyDashMatch) {
+            const [, month, day, year] = mmddyyyyDashMatch;
+            return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        }
+
+        // Check for DD/MM/YYYY format (only if day > 12 to avoid ambiguity)
+        const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (ddmmyyyyMatch) {
+            const [, first, second, year] = ddmmyyyyMatch;
+            if (parseInt(first) > 12) {
+                // Definitely DD/MM/YYYY format
+                return `${year}-${second.padStart(2, "0")}-${first.padStart(
+                    2,
+                    "0"
+                )}`;
+            }
+        }
+
+        // Try to parse with JavaScript Date and convert
+        try {
+            const date = new Date(trimmed);
+            if (!isNaN(date.getTime())) {
+                const year = date.getFullYear();
+                const month = (date.getMonth() + 1).toString().padStart(2, "0");
+                const day = date.getDate().toString().padStart(2, "0");
+                return `${year}-${month}-${day}`;
+            }
+        } catch (e) {
+            console.warn(`Could not parse date: ${trimmed}`);
+        }
+
+        // If all parsing fails, return empty string
+        console.warn(
+            `Unsupported date format: ${trimmed}. Please use YYYY-MM-DD, MM/DD/YYYY, or MM-DD-YYYY format.`
+        );
+        return "";
+    };
+
     const downloadCsvTemplate = () => {
         const headers = [
             "Subject Name",
@@ -201,7 +262,7 @@ export default function Study() {
                 "#dcfce7",
                 "Cell Structure and Function",
                 "https://youtube.com/watch?v=example1",
-                "2024-01-15",
+                "01/15/2024",
                 "10:00",
             ],
             [
@@ -209,7 +270,7 @@ export default function Study() {
                 "#dcfce7",
                 "Photosynthesis Process",
                 "https://youtube.com/watch?v=example2",
-                "2024-01-16",
+                "01-16-2024",
                 "14:30",
             ],
             [
@@ -220,7 +281,7 @@ export default function Study() {
                 "2024-01-17",
                 "09:00",
             ],
-            ["Chemistry", "#dbeafe", "Chemical Bonding", "", "2024-01-18", ""],
+            ["Chemistry", "#dbeafe", "Chemical Bonding", "", "", ""],
         ];
 
         const csvContent = [headers, ...sampleData]
@@ -263,7 +324,7 @@ export default function Study() {
 
     const parseCsvFile = (file: File) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             const text = e.target?.result as string;
             const lines = text.split("\n").filter((line) => line.trim());
 
@@ -277,26 +338,66 @@ export default function Study() {
                 return;
             }
 
+            let dateConversions = 0;
+            let invalidDates = 0;
+
             // Parse CSV (simple parsing - assumes no commas in quoted fields)
             const data = lines
                 .slice(1)
-                .map((line) => {
+                .map((line, index) => {
                     const values = line
                         .split(",")
                         .map((val) => val.replace(/^"|"$/g, "").trim());
+
+                    // Convert date format to YYYY-MM-DD
+                    const originalDate = values[4] || "";
+                    const scheduledDate = convertDateFormat(originalDate);
+
+                    // Track date conversions
+                    if (originalDate && originalDate !== scheduledDate) {
+                        if (scheduledDate) {
+                            dateConversions++;
+                        } else {
+                            invalidDates++;
+                            console.warn(
+                                `Row ${
+                                    index + 2
+                                }: Invalid date format "${originalDate}"`
+                            );
+                        }
+                    }
+
                     return {
                         subjectName: values[0] || "",
                         subjectColor: values[1] || "",
                         videoTitle: values[2] || "",
-                        videoUrl: values[3] || "",
-                        scheduledDate: values[4] || "",
-                        scheduledTime: values[5] || "",
+                        videoUrl: values[3] ? values[3] : "", // Keep empty string for URL to distinguish from undefined
+                        scheduledDate: scheduledDate, // Now in YYYY-MM-DD format
+                        scheduledTime: values[5] ? values[5] : "", // Keep empty string to convert later
                     };
                 })
                 .filter((row) => row.subjectName && row.videoTitle);
 
+            // Show feedback about date conversions
+            if (dateConversions > 0) {
+                toast({
+                    title: "Date formats converted",
+                    description: `${dateConversions} dates were automatically converted to YYYY-MM-DD format`,
+                    duration: 4000,
+                });
+            }
+
+            if (invalidDates > 0) {
+                toast({
+                    title: "Invalid dates found",
+                    description: `${invalidDates} dates could not be parsed. Please check the console for details.`,
+                    variant: "destructive",
+                    duration: 6000,
+                });
+            }
+
             setCsvData(data);
-            generatePreview(data);
+            await generatePreview(data);
         };
 
         reader.onerror = () => {
@@ -310,33 +411,109 @@ export default function Study() {
         reader.readAsText(file);
     };
 
-    const generatePreview = (data: any[]) => {
-        const subjectsMap = new Map();
+    const generatePreview = async (data: any[]) => {
+        const userId = getUserId();
+        if (!userId) return;
 
-        data.forEach((row) => {
-            if (!subjectsMap.has(row.subjectName)) {
-                subjectsMap.set(row.subjectName, {
-                    name: row.subjectName,
-                    color:
-                        row.subjectColor ||
-                        pastelColors[subjectsMap.size % pastelColors.length]
-                            .class,
-                    videos: [],
-                });
-            }
+        try {
+            // Get existing subjects and videos to filter out existing ones from preview
+            const existingSubjects = await getSubjects(userId);
+            const existingVideos = await getVideos(userId);
 
-            const subject = subjectsMap.get(row.subjectName);
-            subject.videos.push({
-                title: row.videoTitle,
-                url: row.videoUrl || undefined,
-                scheduledDate: row.scheduledDate || undefined,
-                scheduledTime: row.scheduledTime || undefined,
+            // Create maps for quick lookup
+            const subjectNameToId = new Map();
+            existingSubjects.forEach((subject) => {
+                subjectNameToId.set(subject.name.toLowerCase(), subject);
             });
-        });
 
-        setCsvPreview({
-            subjects: Array.from(subjectsMap.values()),
-        });
+            const videoTitleToVideo = new Map();
+            existingVideos.forEach((video) => {
+                const key = `${video.subjectId}_${video.title.toLowerCase()}`;
+                videoTitleToVideo.set(key, video);
+            });
+
+            const subjectsMap = new Map();
+
+            data.forEach((row) => {
+                const subjectNameLower = row.subjectName.toLowerCase();
+                let currentSubjectId;
+                let isNewSubject = false;
+
+                // Check if subject exists
+                if (subjectNameToId.has(subjectNameLower)) {
+                    currentSubjectId = subjectNameToId.get(subjectNameLower).id;
+                } else {
+                    // This will be a new subject
+                    currentSubjectId = `new_${row.subjectName}`;
+                    isNewSubject = true;
+                }
+
+                // Check if video is new
+                const videoKey = `${currentSubjectId}_${row.videoTitle.toLowerCase()}`;
+                const isNewVideo = !videoTitleToVideo.has(videoKey);
+
+                // Only include in preview if it's a new video or new subject
+                if (isNewVideo || isNewSubject) {
+                    if (!subjectsMap.has(row.subjectName)) {
+                        subjectsMap.set(row.subjectName, {
+                            name: row.subjectName,
+                            color:
+                                row.subjectColor ||
+                                pastelColors[
+                                    subjectsMap.size % pastelColors.length
+                                ].class,
+                            videos: [],
+                            isNew: isNewSubject,
+                        });
+                    }
+
+                    // Only add the video if it's new
+                    if (isNewVideo) {
+                        const subject = subjectsMap.get(row.subjectName);
+                        subject.videos.push({
+                            title: row.videoTitle,
+                            url: row.videoUrl || undefined,
+                            scheduledDate: row.scheduledDate || undefined,
+                            scheduledTime: row.scheduledTime || undefined,
+                            isNew: true,
+                        });
+                    }
+                }
+            });
+
+            setCsvPreview({
+                subjects: Array.from(subjectsMap.values()),
+            });
+        } catch (error) {
+            console.error("Error generating preview:", error);
+            // Fallback to showing all data if there's an error
+            const subjectsMap = new Map();
+
+            data.forEach((row) => {
+                if (!subjectsMap.has(row.subjectName)) {
+                    subjectsMap.set(row.subjectName, {
+                        name: row.subjectName,
+                        color:
+                            row.subjectColor ||
+                            pastelColors[subjectsMap.size % pastelColors.length]
+                                .class,
+                        videos: [],
+                    });
+                }
+
+                const subject = subjectsMap.get(row.subjectName);
+                subject.videos.push({
+                    title: row.videoTitle,
+                    url: row.videoUrl || undefined,
+                    scheduledDate: row.scheduledDate || undefined,
+                    scheduledTime: row.scheduledTime || undefined,
+                });
+            });
+
+            setCsvPreview({
+                subjects: Array.from(subjectsMap.values()),
+            });
+        }
     };
 
     const saveCsvData = async () => {
@@ -362,33 +539,105 @@ export default function Study() {
         setCsvLoading(true);
 
         try {
-            for (const subjectData of csvPreview.subjects) {
-                // Create subject
-                const subject = await createSubject(userId, {
-                    name: subjectData.name,
-                    color: subjectData.color,
-                });
+            // Get existing subjects and videos first
+            const existingSubjects = await getSubjects(userId);
+            const existingVideos = await getVideos(userId);
 
-                // Create videos for this subject
-                for (const videoData of subjectData.videos) {
-                    await createVideo(userId, {
-                        title: videoData.title,
-                        url: videoData.url,
-                        subjectId: subject.id,
-                        scheduledDate: videoData.scheduledDate,
-                        scheduledTime: videoData.scheduledTime,
+            // Create maps for quick lookup
+            const subjectNameToId = new Map();
+            existingSubjects.forEach((subject) => {
+                subjectNameToId.set(subject.name.toLowerCase(), subject);
+            });
+
+            const videoTitleToVideo = new Map();
+            existingVideos.forEach((video) => {
+                const key = `${video.subjectId}_${video.title.toLowerCase()}`;
+                videoTitleToVideo.set(key, video);
+            });
+
+            let newSubjectsCount = 0;
+            let updatedVideosCount = 0;
+            let newVideosCount = 0;
+
+            for (const subjectData of csvPreview.subjects) {
+                let currentSubject;
+                const subjectNameLower = subjectData.name.toLowerCase();
+
+                // Check if subject already exists
+                if (subjectNameToId.has(subjectNameLower)) {
+                    currentSubject = subjectNameToId.get(subjectNameLower);
+                    console.log(
+                        `Subject "${subjectData.name}" already exists, using existing one`
+                    );
+                } else {
+                    // Create new subject
+                    currentSubject = await createSubject(userId, {
+                        name: subjectData.name,
+                        color: subjectData.color,
                     });
+                    subjectNameToId.set(subjectNameLower, currentSubject);
+                    newSubjectsCount++;
+                    console.log(`Created new subject: "${subjectData.name}"`);
+                }
+
+                // Process videos for this subject
+                for (const videoData of subjectData.videos) {
+                    const videoKey = `${
+                        currentSubject.id
+                    }_${videoData.title.toLowerCase()}`;
+
+                    if (videoTitleToVideo.has(videoKey)) {
+                        // Video exists, update it
+                        const existingVideo = videoTitleToVideo.get(videoKey);
+
+                        // Convert empty strings to undefined to clear fields
+                        const updateData = {
+                            title: videoData.title, // Keep original case
+                            url: videoData.url || undefined,
+                            scheduledDate: videoData.scheduledDate || undefined,
+                            scheduledTime: videoData.scheduledTime || undefined,
+                        };
+
+                        await updateVideo(userId, existingVideo.id, updateData);
+                        updatedVideosCount++;
+                        console.log(
+                            `Updated existing video: "${videoData.title}" in subject "${subjectData.name}"`
+                        );
+                    } else {
+                        // Create new video
+                        const createData = {
+                            title: videoData.title,
+                            url: videoData.url || undefined,
+                            subjectId: currentSubject.id,
+                            scheduledDate: videoData.scheduledDate || undefined,
+                            scheduledTime: videoData.scheduledTime || undefined,
+                        };
+
+                        await createVideo(userId, createData);
+                        newVideosCount++;
+                        console.log(
+                            `Created new video: "${videoData.title}" in subject "${subjectData.name}"`
+                        );
+                    }
                 }
             }
 
+            // Show detailed success message
+            const messages = [];
+            if (newSubjectsCount > 0)
+                messages.push(`${newSubjectsCount} new subjects created`);
+            if (newVideosCount > 0)
+                messages.push(`${newVideosCount} new videos created`);
+            if (updatedVideosCount > 0)
+                messages.push(`${updatedVideosCount} videos updated`);
+
             toast({
                 title: "Import successful",
-                description: `Successfully imported ${
-                    csvPreview.subjects.length
-                } subjects with ${csvPreview.subjects.reduce(
-                    (total, subject) => total + subject.videos.length,
-                    0
-                )} videos`,
+                description:
+                    messages.length > 0
+                        ? messages.join(", ")
+                        : "No changes were made - all data already exists",
+                duration: 5000, // Show for 5 seconds to give user time to read
             });
 
             // Reset CSV modal state
@@ -1147,6 +1396,16 @@ export default function Study() {
                                                 Selected file: {csvFile.name}
                                             </p>
                                         )}
+                                        <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
+                                            📅{" "}
+                                            <strong>
+                                                Date formats supported:
+                                            </strong>{" "}
+                                            YYYY-MM-DD, MM/DD/YYYY, MM-DD-YYYY
+                                            <br />
+                                            Dates will be automatically
+                                            converted to the correct format.
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1154,7 +1413,7 @@ export default function Study() {
                                 {csvPreview.subjects.length > 0 && (
                                     <div className="border rounded-lg p-4">
                                         <h3 className="font-medium mb-4">
-                                            Preview
+                                            Preview - New Items Only
                                         </h3>
                                         <div className="space-y-4 max-h-64 overflow-y-auto">
                                             {csvPreview.subjects.map(
@@ -1178,13 +1437,22 @@ export default function Study() {
                                                             <span className="font-medium">
                                                                 {subject.name}
                                                             </span>
+                                                            {(subject as any)
+                                                                .isNew && (
+                                                                <Badge
+                                                                    variant="default"
+                                                                    className="bg-green-500 text-white"
+                                                                >
+                                                                    New Subject
+                                                                </Badge>
+                                                            )}
                                                             <Badge variant="secondary">
                                                                 {
                                                                     subject
                                                                         .videos
                                                                         .length
                                                                 }{" "}
-                                                                videos
+                                                                new videos
                                                             </Badge>
                                                         </div>
                                                         <div className="ml-6 space-y-1">
@@ -1197,12 +1465,20 @@ export default function Study() {
                                                                         key={
                                                                             videoIndex
                                                                         }
-                                                                        className="text-sm text-muted-foreground"
+                                                                        className="text-sm text-muted-foreground flex items-center gap-2"
                                                                     >
-                                                                        •{" "}
-                                                                        {
-                                                                            video.title
-                                                                        }
+                                                                        <span>
+                                                                            •{" "}
+                                                                            {
+                                                                                video.title
+                                                                            }
+                                                                        </span>
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="text-xs bg-blue-50 text-blue-700"
+                                                                        >
+                                                                            New
+                                                                        </Badge>
                                                                         {video.scheduledDate && (
                                                                             <span className="ml-2 text-xs">
                                                                                 (
@@ -1212,6 +1488,7 @@ export default function Study() {
                                                                                 {
                                                                                     video.scheduledTime
                                                                                 }
+
                                                                                 )
                                                                             </span>
                                                                         )}
@@ -1222,6 +1499,11 @@ export default function Study() {
                                                     </div>
                                                 )
                                             )}
+                                        </div>
+                                        <div className="mt-2 text-xs text-muted-foreground">
+                                            💡 Only new subjects and videos are
+                                            shown. Existing items will be
+                                            updated in place.
                                         </div>
                                     </div>
                                 )}

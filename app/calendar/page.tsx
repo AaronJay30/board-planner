@@ -845,7 +845,7 @@ export default function Calendar() {
                                         No videos scheduled for this day.
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
+                                    <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
                                         {getVideosForDay(
                                             modalDate.day,
                                             modalDate.month,
@@ -866,35 +866,55 @@ export default function Calendar() {
                                                 />
                                                 <div className="flex-1 space-y-2">
                                                     <div className="flex items-center justify-between">
-                                                        <button
-                                                            className={`font-medium text-left hover:text-blue-600 transition-colors ${
-                                                                video.completed
-                                                                    ? "line-through text-muted-foreground"
-                                                                    : ""
-                                                            }`}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                window.open(
-                                                                    video.url,
-                                                                    "_blank"
-                                                                );
-                                                            }}
-                                                        >
-                                                            {video.title}
-                                                        </button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            asChild
-                                                        >
-                                                            <a
-                                                                href={video.url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                        {video.url &&
+                                                        video.url.trim() ? (
+                                                            <button
+                                                                className={`font-medium text-left hover:text-blue-600 transition-colors ${
+                                                                    video.completed
+                                                                        ? "line-through text-muted-foreground"
+                                                                        : ""
+                                                                }`}
+                                                                onClick={(
+                                                                    e
+                                                                ) => {
+                                                                    e.stopPropagation();
+                                                                    window.open(
+                                                                        video.url,
+                                                                        "_blank"
+                                                                    );
+                                                                }}
                                                             >
-                                                                <ExternalLink className="w-4 h-4" />
-                                                            </a>
-                                                        </Button>
+                                                                {video.title}
+                                                            </button>
+                                                        ) : (
+                                                            <span
+                                                                className={`font-medium text-left ${
+                                                                    video.completed
+                                                                        ? "line-through text-muted-foreground"
+                                                                        : ""
+                                                                }`}
+                                                            >
+                                                                {video.title}
+                                                            </span>
+                                                        )}
+                                                        {video.url &&
+                                                            video.url.trim() && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    asChild
+                                                                >
+                                                                    <a
+                                                                        href={
+                                                                            video.url
+                                                                        }
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                    >
+                                                                        <ExternalLink className="w-4 h-4" />
+                                                                    </a>
+                                                                </Button>
+                                                            )}
                                                     </div>
                                                     <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                                                         <Badge variant="secondary">
@@ -1521,35 +1541,53 @@ export default function Calendar() {
                                             />
                                             <div className="flex-1 space-y-2">
                                                 <div className="flex items-center justify-between">
-                                                    <button
-                                                        className={`font-medium text-left hover:text-blue-600 transition-colors ${
-                                                            video.completed
-                                                                ? "line-through text-muted-foreground"
-                                                                : ""
-                                                        }`}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            window.open(
-                                                                video.url,
-                                                                "_blank"
-                                                            );
-                                                        }}
-                                                    >
-                                                        {video.title}
-                                                    </button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        asChild
-                                                    >
-                                                        <a
-                                                            href={video.url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
+                                                    {video.url &&
+                                                    video.url.trim() ? (
+                                                        <button
+                                                            className={`font-medium text-left hover:text-blue-600 transition-colors ${
+                                                                video.completed
+                                                                    ? "line-through text-muted-foreground"
+                                                                    : ""
+                                                            }`}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(
+                                                                    video.url,
+                                                                    "_blank"
+                                                                );
+                                                            }}
                                                         >
-                                                            <ExternalLink className="w-4 h-4" />
-                                                        </a>
-                                                    </Button>
+                                                            {video.title}
+                                                        </button>
+                                                    ) : (
+                                                        <span
+                                                            className={`font-medium text-left ${
+                                                                video.completed
+                                                                    ? "line-through text-muted-foreground"
+                                                                    : ""
+                                                            }`}
+                                                        >
+                                                            {video.title}
+                                                        </span>
+                                                    )}
+                                                    {video.url &&
+                                                        video.url.trim() && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                asChild
+                                                            >
+                                                                <a
+                                                                    href={
+                                                                        video.url
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                >
+                                                                    <ExternalLink className="w-4 h-4" />
+                                                                </a>
+                                                            </Button>
+                                                        )}
                                                 </div>
                                                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                                                     <Badge variant="secondary">
