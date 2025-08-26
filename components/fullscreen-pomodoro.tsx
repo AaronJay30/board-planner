@@ -97,11 +97,8 @@ export function FullscreenPomodoro({
                     break;
                 case " ":
                     event.preventDefault();
-                    if (isBreak) {
-                        resumeFromBreak();
-                    } else {
-                        setIsRunning(!isRunning);
-                    }
+                    // Always use setIsRunning for play/pause, regardless of break mode
+                    setIsRunning(!isRunning);
                     break;
                 case "r":
                     event.preventDefault();
