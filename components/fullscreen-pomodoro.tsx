@@ -248,15 +248,17 @@ export function FullscreenPomodoro({
                             onClick={() => setIsRunning(!isRunning)}
                             variant={isRunning ? "secondary" : "default"}
                             size="lg"
-                            className="px-8"
+                            className="px-8 hover:bg-accent hover:text-accent-foreground"
                         >
                             {isRunning ? (
                                 <>
-                                    <Pause className="w-5 h-5 mr-2" /> Pause Break
+                                    <Pause className="w-5 h-5 mr-2" /> Pause
+                                    Break
                                 </>
                             ) : (
                                 <>
-                                    <Play className="w-5 h-5 mr-2" /> Start Break
+                                    <Play className="w-5 h-5 mr-2" /> Start
+                                    Break
                                 </>
                             )}
                         </Button>
