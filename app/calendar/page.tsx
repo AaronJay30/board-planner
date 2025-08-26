@@ -47,8 +47,10 @@ import {
     Trash2,
     Check,
     X,
+    Maximize,
 } from "lucide-react";
 import { DailyQuote } from "@/components/daily-quote";
+import { FullscreenPomodoro } from "@/components/fullscreen-pomodoro";
 
 interface ScheduledVideo {
     id: string;
@@ -68,6 +70,13 @@ export default function Calendar() {
     const [currentTime, setCurrentTime] = useState(25 * 60); // 25 minutes in seconds
     const [isRunning, setIsRunning] = useState(false);
     const [isBreak, setIsBreak] = useState(false);
+
+    // Break timer configuration
+    const [breakMinutes, setBreakMinutes] = useState(5);
+    const [currentBreakTime, setCurrentBreakTime] = useState(5 * 60); // 5 minutes in seconds
+
+    // Fullscreen pomodoro state
+    const [isFullscreenPomodoro, setIsFullscreenPomodoro] = useState(false);
 
     // Modal state for per-date view
     const [modalOpen, setModalOpen] = useState(false);
@@ -91,6 +100,12 @@ export default function Calendar() {
                 if (typeof state.currentTime === "number") {
                     setCurrentTime(state.currentTime);
                 }
+                if (typeof state.breakMinutes === "number") {
+                    setBreakMinutes(state.breakMinutes);
+                }
+                if (typeof state.currentBreakTime === "number") {
+                    setCurrentBreakTime(state.currentBreakTime);
+                }
                 setIsRunning(false); // always stop on load
                 setIsBreak(false);
             } catch {}
@@ -100,15 +115,30 @@ export default function Calendar() {
         }
     }, []);
 
+    // Alarm function
+    const playAlarm = () => {
+        try {
+            const audio = new Audio("/alarm.mp3");
+            audio.volume = 0.5; // Set volume to 50%
+            audio.play().catch((error) => {
+                console.warn("Could not play alarm sound:", error);
+            });
+        } catch (error) {
+            console.warn("Could not load alarm sound:", error);
+        }
+    };
+
     // Save Pomodoro state to localStorage on every change
     useEffect(() => {
         if (typeof window === "undefined") return;
         const state = {
             pomodoroMinutes,
             currentTime,
+            breakMinutes,
+            currentBreakTime,
         };
         localStorage.setItem("pomodoroSimpleState", JSON.stringify(state));
-    }, [pomodoroMinutes, currentTime]);
+    }, [pomodoroMinutes, currentTime, breakMinutes, currentBreakTime]);
 
     // Store study and break time in seconds for today
     const [todayTimes, setTodayTimes] = useState<{
@@ -289,25 +319,38 @@ export default function Calendar() {
     const [breakDuration, setBreakDuration] = useState<number>(0); // seconds
     useEffect(() => {
         let interval: NodeJS.Timeout | null = null;
+        // Pomodoro countdown timer
         if (isRunning && currentTime > 0 && !isBreak) {
             interval = setInterval(() => {
-                setCurrentTime((prev) => prev - 1);
+                setCurrentTime((prev) => {
+                    if (prev <= 1) {
+                        // Timer reached zero - play alarm and stop
+                        playAlarm();
+                        setIsRunning(false);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
             }, 1000);
         }
-        if (isBreak && breakStart) {
+        // Break countdown timer
+        if (isRunning && currentBreakTime > 0 && isBreak) {
             interval = setInterval(() => {
-                setBreakDuration(
-                    Math.floor((Date.now() - breakStart.getTime()) / 1000)
-                );
+                setCurrentBreakTime((prev) => {
+                    if (prev <= 1) {
+                        // Break timer reached zero - play alarm and stop
+                        playAlarm();
+                        setIsRunning(false);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
             }, 1000);
-        }
-        if (currentTime === 0 && isRunning && !isBreak) {
-            setIsRunning(false);
         }
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [isRunning, currentTime, isBreak, pomodoroMinutes, breakStart]);
+    }, [isRunning, currentTime, currentBreakTime, isBreak]);
 
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
@@ -319,9 +362,12 @@ export default function Calendar() {
 
     // --- Pomodoro: Remove study time update from reset ---
     const resetTimer = () => {
-        setCurrentTime(pomodoroMinutes * 60);
+        if (isBreak) {
+            setCurrentBreakTime(breakMinutes * 60);
+        } else {
+            setCurrentTime(pomodoroMinutes * 60);
+        }
         setIsRunning(false);
-        setIsBreak(false);
         setBreakStart(null);
         setBreakDuration(0);
     };
@@ -344,20 +390,26 @@ export default function Calendar() {
                 });
             }
         }
-        // Save break time if any
-        if (breakDuration > 0 && userData?.id) {
-            const today = new Date();
-            const dateStr = today.toISOString().split("T")[0];
-            await incrementStudyTime(userData.id, dateStr, {
-                break: { seconds: breakDuration },
-            });
-            const updated = await getStudyTime(userData.id, dateStr);
-            setTodayTimes({
-                study: updated.study?.seconds || 0,
-                break: updated.break?.seconds || 0,
-            });
+        // Save break time if any (for break timer finish)
+        if (isBreak && userData?.id) {
+            const elapsedBreakTime = breakMinutes * 60 - currentBreakTime;
+            if (elapsedBreakTime > 0) {
+                const today = new Date();
+                const dateStr = today.toISOString().split("T")[0];
+                await incrementStudyTime(userData.id, dateStr, {
+                    break: { seconds: elapsedBreakTime },
+                });
+                const updated = await getStudyTime(userData.id, dateStr);
+                setTodayTimes({
+                    study: updated.study?.seconds || 0,
+                    break: updated.break?.seconds || 0,
+                });
+            }
         }
+
+        // Reset timers
         setCurrentTime(pomodoroMinutes * 60);
+        setCurrentBreakTime(breakMinutes * 60);
         setIsRunning(false);
         setIsBreak(false);
         setBreakStart(null);
@@ -368,17 +420,20 @@ export default function Calendar() {
     const startBreak = () => {
         setIsBreak(true);
         setIsRunning(false);
+        setCurrentBreakTime(breakMinutes * 60); // Reset break timer to configured minutes
         setBreakStart(new Date());
         setBreakDuration(0);
     };
 
     // --- Pomodoro: Resume from break (save break time) ---
     const resumeFromBreak = async () => {
-        if (breakDuration > 0 && userData?.id) {
+        // Calculate elapsed break time
+        const elapsedBreakTime = breakMinutes * 60 - currentBreakTime;
+        if (elapsedBreakTime > 0 && userData?.id) {
             const today = new Date();
             const dateStr = today.toISOString().split("T")[0];
             await incrementStudyTime(userData.id, dateStr, {
-                break: { seconds: breakDuration },
+                break: { seconds: elapsedBreakTime },
             });
             const updated = await getStudyTime(userData.id, dateStr);
             setTodayTimes({
@@ -396,6 +451,14 @@ export default function Calendar() {
         setPomodoroMinutes((prev) => {
             const next = Math.max(1, prev + delta);
             setCurrentTime(next * 60);
+            return next;
+        });
+    };
+
+    const handleBreakMinutesChange = (delta: number) => {
+        setBreakMinutes((prev) => {
+            const next = Math.max(1, prev + delta);
+            setCurrentBreakTime(next * 60);
             return next;
         });
     };
@@ -1050,21 +1113,28 @@ export default function Calendar() {
 
                     {/* Pomodoro Timer */}
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">
-                                Pomodoro Timer
-                            </CardTitle>
-                            <CardDescription>
-                                {isBreak
-                                    ? `Break Time${
-                                          breakDuration > 0
-                                              ? ` (${Math.floor(
-                                                    breakDuration / 60
-                                                )}m ${breakDuration % 60}s)`
-                                              : ""
-                                      }`
-                                    : "Focus Time"}
-                            </CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg">
+                                    Pomodoro Timer
+                                </CardTitle>
+                                <CardDescription>
+                                    {isBreak
+                                        ? `Break Time (${formatTime(
+                                              currentBreakTime
+                                          )} remaining)`
+                                        : "Focus Time"}
+                                </CardDescription>
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsFullscreenPomodoro(true)}
+                                className="shrink-0"
+                                title="Fullscreen Timer"
+                            >
+                                <Maximize className="w-4 h-4" />
+                            </Button>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex flex-col items-center w-full">
@@ -1091,28 +1161,38 @@ export default function Calendar() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                            handlePomodoroMinutesChange(-5)
+                                            isBreak
+                                                ? handleBreakMinutesChange(-1)
+                                                : handlePomodoroMinutesChange(
+                                                      -5
+                                                  )
                                         }
                                     >
-                                        -5
+                                        {isBreak ? "-1" : "-5"}
                                     </Button>
                                     <span className="font-mono">
-                                        {pomodoroMinutes} min
+                                        {isBreak
+                                            ? `${breakMinutes} min`
+                                            : `${pomodoroMinutes} min`}
                                     </span>
                                     <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                            handlePomodoroMinutesChange(5)
+                                            isBreak
+                                                ? handleBreakMinutesChange(1)
+                                                : handlePomodoroMinutesChange(5)
                                         }
                                     >
-                                        +5
+                                        {isBreak ? "+1" : "+5"}
                                     </Button>
                                 </div>
                             </div>
                             <div className="text-center">
                                 <div className="text-4xl font-mono font-bold">
-                                    {formatTime(currentTime)}
+                                    {formatTime(
+                                        isBreak ? currentBreakTime : currentTime
+                                    )}
                                 </div>
                             </div>
                             <div className="w-full flex flex-col gap-2">
@@ -1120,10 +1200,22 @@ export default function Calendar() {
                                 {isBreak ? (
                                     <Button
                                         className="hover:bg-accent hover:text-accent-foreground w-full xl:w-auto"
-                                        onClick={resumeFromBreak}
-                                        variant="default"
+                                        onClick={() => setIsRunning(!isRunning)}
+                                        variant={
+                                            isRunning ? "secondary" : "default"
+                                        }
                                     >
-                                        <Play className="w-4 h-4" /> Resume
+                                        {isRunning ? (
+                                            <>
+                                                <Pause className="w-4 h-4" />{" "}
+                                                Pause Break
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Play className="w-4 h-4" />{" "}
+                                                Start Break
+                                            </>
+                                        )}
                                     </Button>
                                 ) : (
                                     <Button
@@ -1164,6 +1256,16 @@ export default function Calendar() {
                                         className="w-full xl:w-auto"
                                     >
                                         <Pause className="w-4 h-4" /> Break
+                                    </Button>
+                                )}
+                                {/* End Break - only show when in break mode */}
+                                {isBreak && (
+                                    <Button
+                                        onClick={resumeFromBreak}
+                                        variant="outline"
+                                        className="w-full xl:w-auto"
+                                    >
+                                        <Check className="w-4 h-4" /> End Break
                                     </Button>
                                 )}
                             </div>
@@ -1643,6 +1745,29 @@ export default function Calendar() {
                     </Card>
                 </div>
             </div>
+
+            {/* Fullscreen Pomodoro Component */}
+            <FullscreenPomodoro
+                isOpen={isFullscreenPomodoro}
+                onClose={() => setIsFullscreenPomodoro(false)}
+                currentTime={currentTime}
+                currentBreakTime={currentBreakTime}
+                isRunning={isRunning}
+                isBreak={isBreak}
+                pomodoroMinutes={pomodoroMinutes}
+                breakMinutes={breakMinutes}
+                breakDuration={breakDuration}
+                todayTimes={todayTimes}
+                formatTime={formatTime}
+                handlePomodoroMinutesChange={handlePomodoroMinutesChange}
+                handleBreakMinutesChange={handleBreakMinutesChange}
+                setIsRunning={setIsRunning}
+                resumeFromBreak={resumeFromBreak}
+                resetTimer={resetTimer}
+                finishPomodoro={finishPomodoro}
+                startBreak={startBreak}
+                playAlarm={playAlarm}
+            />
         </div>
     );
 }
